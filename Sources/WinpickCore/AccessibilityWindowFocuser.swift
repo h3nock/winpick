@@ -7,6 +7,11 @@ public protocol WindowFocusing {
 }
 
 public struct AccessibilityWindowFocuser: WindowFocusing {
+    private enum WindowReadResult {
+        case success([AXUIElement])
+        case failure
+    }
+
     public init() {}
 
     public func focus(_ window: WindowRecord, promptForPermission: Bool = true) throws {
@@ -17,23 +22,10 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         }
 
         let appElement = AXUIElementCreateApplication(window.pid)
-        var windowsValue: CFTypeRef?
-        let copyResult = AXUIElementCopyAttributeValue(
-            appElement,
-            kAXWindowsAttribute as CFString,
-            &windowsValue
-        )
-
-        guard copyResult == .success, let axWindows = windowsValue as? [AXUIElement] else {
-            throw WinpickError.cannotReadApplicationWindows(app: window.app)
-        }
-
-        guard let axWindow = bestMatch(for: window, in: axWindows) else {
-            throw WinpickError.cannotMatchAccessibilityWindow(app: window.app, title: window.title)
-        }
-
         NSRunningApplication(processIdentifier: window.pid)?
             .activate(options: [])
+
+        let axWindow = try matchingWindow(for: window, in: appElement)
 
         AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
         let focusResult = AXUIElementSetAttributeValue(
@@ -45,6 +37,50 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         guard focusResult == .success else {
             throw WinpickError.focusFailed(app: window.app, title: window.title)
         }
+    }
+
+    private func matchingWindow(for target: WindowRecord, in appElement: AXUIElement) throws -> AXUIElement {
+        let retryDelay: TimeInterval = 0.1
+        let attempts = 12
+        var didReadWindows = false
+
+        for attempt in 0..<attempts {
+            if case .success(let windows) = readWindows(from: appElement) {
+                didReadWindows = true
+                if let match = bestMatch(for: target, in: windows) {
+                    return match
+                }
+            }
+
+            if attempt < attempts - 1 {
+                Thread.sleep(forTimeInterval: retryDelay)
+            }
+        }
+
+        if didReadWindows {
+            throw WinpickError.cannotMatchAccessibilityWindow(app: target.app, title: target.title)
+        }
+
+        throw WinpickError.cannotReadApplicationWindows(app: target.app)
+    }
+
+    private func readWindows(from appElement: AXUIElement) -> WindowReadResult {
+        var windowsValue: CFTypeRef?
+        let copyResult = AXUIElementCopyAttributeValue(
+            appElement,
+            kAXWindowsAttribute as CFString,
+            &windowsValue
+        )
+
+        guard copyResult == .success else {
+            return .failure
+        }
+
+        guard let windows = windowsValue as? [AXUIElement] else {
+            return .failure
+        }
+
+        return .success(windows)
     }
 
     private func bestMatch(for target: WindowRecord, in windows: [AXUIElement]) -> AXUIElement? {
@@ -69,10 +105,7 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         }
 
         if let frame = frame(of: window) {
-            let distance = abs(frame.x - target.frame.x)
-                + abs(frame.y - target.frame.y)
-                + abs(frame.width - target.frame.width)
-                + abs(frame.height - target.frame.height)
+            let distance = frame.distance(to: target.frame)
             if distance < 8 {
                 score += 80
             } else if distance < 32 {
@@ -105,8 +138,11 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
 
         var point = CGPoint.zero
         var size = CGSize.zero
-        AXValueGetValue(positionAX as! AXValue, .cgPoint, &point)
-        AXValueGetValue(sizeAX as! AXValue, .cgSize, &size)
+        guard AXValueGetValue(positionAX as! AXValue, .cgPoint, &point),
+              AXValueGetValue(sizeAX as! AXValue, .cgSize, &size)
+        else {
+            return nil
+        }
 
         return WindowFrame(
             x: point.x,

@@ -43,6 +43,13 @@ import Testing
     #expect(window.pickerLine.hasPrefix("42\t"))
 }
 
+@Test func windowFrameDistanceComparesPositionAndSize() {
+    let lhs = WindowFrame(x: 10, y: 20, width: 300, height: 200)
+    let rhs = WindowFrame(x: 14, y: 18, width: 310, height: 190)
+
+    #expect(lhs.distance(to: rhs) == 26)
+}
+
 @Test func permissionInstructionsIncludeAppName() {
     let message = AccessibilityPermission.instructions(appName: "Ghostty")
 

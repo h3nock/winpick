@@ -165,7 +165,7 @@ public struct CLI {
         let report = DoctorReport(
             accessibility: permission,
             fzfFound: FzfWindowPicker.commandExists("fzf"),
-            visibleWindowCount: windows.count
+            windowCount: windows.count
         )
 
         if json {
@@ -181,7 +181,7 @@ public struct CLI {
             print("  Open: winpick permissions --open-settings")
         }
         print("fzf: \(report.fzfFound ? "found" : "missing")")
-        print("Visible windows: \(report.visibleWindowCount)")
+        print("Windows: \(report.windowCount)")
     }
 
     private func writeJSON<T: Encodable>(_ value: T) throws {
@@ -209,7 +209,7 @@ public struct CLI {
     private struct DoctorReport: Encodable {
         let accessibility: AccessibilityPermissionReport
         let fzfFound: Bool
-        let visibleWindowCount: Int
+        let windowCount: Int
     }
 
     public static let help = """
@@ -218,8 +218,8 @@ public struct CLI {
     Usage:
       winpick                 Pick a window with fzf and focus it
       winpick pick [--json]   Pick a window with fzf and focus it
-      winpick list [--json]   List visible windows
-      winpick focus <id>      Focus a visible window by id
+      winpick list [--json]   List windows across Spaces
+      winpick focus <id>      Focus a window by id
       winpick current [--json]
       winpick permissions [--json] [--prompt] [--open-settings]
       winpick doctor [--json]
@@ -227,7 +227,7 @@ public struct CLI {
       winpick version
 
     Notes:
-      - Listing uses native macOS window metadata.
+      - Listing uses native macOS window metadata across Spaces.
       - Focusing requires Accessibility permission for the terminal app running winpick.
       - Run `winpick permissions --open-settings` for guided setup.
       - No screenshots are captured by this tool.

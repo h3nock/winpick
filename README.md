@@ -14,13 +14,13 @@ Pick a window interactively and focus it:
 winpick
 ```
 
-List visible windows:
+List windows across Spaces:
 
 ```sh
 winpick list
 ```
 
-List visible windows for agents:
+List windows across Spaces for agents:
 
 ```sh
 winpick list --json

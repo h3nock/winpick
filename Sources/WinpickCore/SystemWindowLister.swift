@@ -9,7 +9,7 @@ public struct SystemWindowLister: WindowListing {
     public init() {}
 
     public func listWindows() throws -> [WindowRecord] {
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        let options: CGWindowListOption = [.optionAll, .excludeDesktopElements]
         let rawWindows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
 
         return rawWindows.compactMap(Self.makeRecord)
@@ -30,6 +30,8 @@ public struct SystemWindowLister: WindowListing {
         let title = stringValue(window[kCGWindowName as String])
         let pid = Int32(intValue(window[kCGWindowOwnerPID as String]) ?? 0)
         let layer = intValue(window[kCGWindowLayer as String]) ?? 0
+        guard layer == 0 else { return nil }
+
         let alpha = doubleValue(window[kCGWindowAlpha as String]) ?? 1
         guard alpha > 0 else { return nil }
 
@@ -39,11 +41,7 @@ public struct SystemWindowLister: WindowListing {
 
         let width = doubleValue(bounds["Width"]) ?? 0
         let height = doubleValue(bounds["Height"]) ?? 0
-        guard width >= 20, height >= 20 else { return nil }
-
-        if layer != 0 && title.isEmpty {
-            return nil
-        }
+        guard width >= 160, height >= 120 else { return nil }
 
         return WindowRecord(
             id: id,

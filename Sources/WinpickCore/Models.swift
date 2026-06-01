@@ -12,6 +12,13 @@ public struct WindowFrame: Codable, Equatable, Sendable {
         self.width = width
         self.height = height
     }
+
+    func distance(to other: WindowFrame) -> Double {
+        abs(x - other.x)
+            + abs(y - other.y)
+            + abs(width - other.width)
+            + abs(height - other.height)
+    }
 }
 
 public struct WindowRecord: Codable, Equatable, Sendable {
@@ -46,7 +53,9 @@ public struct WindowRecord: Codable, Equatable, Sendable {
     }
 
     public var pickerLine: String {
-        "\(id)\t\(app.padding(toLength: 24, withPad: " ", startingAt: 0)) \(title)"
+        let label = title.isEmpty ? app : "\(app) - \(title)"
+        let frameText = "\(Int(frame.width))x\(Int(frame.height))+\(Int(frame.x))+\(Int(frame.y))"
+        return "\(id)\t\(label)  [id:\(id)] [\(frameText)]"
     }
 }
 
@@ -70,7 +79,7 @@ public enum WinpickError: Error, CustomStringConvertible, Equatable {
     public var description: String {
         switch self {
         case .missingWindow(let id):
-            "No visible window found with id \(id)."
+            "No window found with id \(id). Run `winpick list` again because window ids can change."
         case .accessibilityPermissionRequired(let appName):
             AccessibilityPermission.instructions(appName: appName)
         case .cannotReadApplicationWindows(let app):
@@ -88,7 +97,7 @@ public enum WinpickError: Error, CustomStringConvertible, Equatable {
         case .invalidArguments(let message):
             message
         case .noWindows:
-            "No visible windows found."
+            "No windows found."
         }
     }
 }
