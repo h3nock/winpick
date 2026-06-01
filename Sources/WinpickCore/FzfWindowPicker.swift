@@ -8,6 +8,54 @@ public protocol WindowPicking {
 public struct FzfWindowPicker: WindowPicking {
     public init() {}
 
+    public func execFocusPicker(from windows: [WindowRecord], json: Bool, binaryPath: String) throws -> Never {
+        guard isatty(STDOUT_FILENO) == 1 else {
+            throw WinpickError.pickerRequiresTerminal
+        }
+
+        guard !windows.isEmpty else {
+            throw WinpickError.noWindows
+        }
+
+        guard commandExists("fzf") else {
+            throw WinpickError.fzfUnavailable
+        }
+
+        let inputURL = try writeRowsToTemporaryFile(windows)
+        let script = """
+        trap 'rm -f "$WINPICK_PICKER_FILE"' EXIT
+        selected="$(fzf --delimiter=$'\\t' --with-nth=2.. --prompt='window> ' < "$WINPICK_PICKER_FILE")" || exit 130
+        id="${selected%%$'\\t'*}"
+        rm -f "$WINPICK_PICKER_FILE"
+        trap - EXIT
+        if [[ "$WINPICK_JSON" == "1" ]]; then
+          exec "$WINPICK_BIN" focus "$id" --json
+        else
+          exec "$WINPICK_BIN" focus "$id"
+        fi
+        """
+
+        var environment = ProcessInfo.processInfo.environment
+        environment["WINPICK_PICKER_FILE"] = inputURL.path
+        environment["WINPICK_BIN"] = binaryPath
+        environment["WINPICK_JSON"] = json ? "1" : "0"
+
+        let argvStrings: [String] = ["zsh", "-lc", script]
+        var argv: [UnsafeMutablePointer<CChar>?] = argvStrings.map { strdup($0) }
+        argv.append(nil)
+        var envp: [UnsafeMutablePointer<CChar>?] = environment.map { key, value in
+            strdup("\(key)=\(value)")
+        }
+        envp.append(nil)
+
+        _ = argv.withUnsafeMutableBufferPointer { argvBuffer in
+            envp.withUnsafeMutableBufferPointer { envBuffer in
+                execve("/bin/zsh", argvBuffer.baseAddress, envBuffer.baseAddress)
+            }
+        }
+        throw WinpickError.invalidArguments("Could not start fzf picker.")
+    }
+
     public func pick(from windows: [WindowRecord]) throws -> WindowRecord {
         guard isatty(STDOUT_FILENO) == 1 else {
             throw WinpickError.pickerRequiresTerminal
@@ -30,21 +78,22 @@ public struct FzfWindowPicker: WindowPicking {
             "--prompt=window> ",
         ]
 
-        let input = Pipe()
+        let inputURL = try writeRowsToTemporaryFile(windows)
         let output = Pipe()
-        process.standardInput = input
+        let inputHandle = try FileHandle(forReadingFrom: inputURL)
+        defer {
+            try? inputHandle.close()
+            try? FileManager.default.removeItem(at: inputURL)
+        }
+
+        process.standardInput = inputHandle
         process.standardOutput = output
-        process.standardError = FileHandle.standardError
 
         do {
             try process.run()
         } catch {
             throw WinpickError.fzfUnavailable
         }
-
-        let rows = windows.map(\.pickerLine).joined(separator: "\n") + "\n"
-        input.fileHandleForWriting.write(Data(rows.utf8))
-        input.fileHandleForWriting.closeFile()
 
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
@@ -62,6 +111,14 @@ public struct FzfWindowPicker: WindowPicking {
         }
 
         return window
+    }
+
+    private func writeRowsToTemporaryFile(_ windows: [WindowRecord]) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("winpick-\(UUID().uuidString).tsv")
+        let rows = windows.map(\.pickerLine).joined(separator: "\n") + "\n"
+        try Data(rows.utf8).write(to: url, options: [.atomic])
+        return url
     }
 
     private func commandExists(_ name: String) -> Bool {

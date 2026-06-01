@@ -3,10 +3,10 @@ import Foundation
 public struct CLI {
     private let lister: WindowListing
     private let focuser: WindowFocusing
-    private let picker: WindowPicking
+    private let picker: FzfWindowPicker
     private let frontmostResolver: FrontmostWindowResolver
 
-    public init(lister: WindowListing, focuser: WindowFocusing, picker: WindowPicking) {
+    public init(lister: WindowListing, focuser: WindowFocusing, picker: FzfWindowPicker) {
         self.lister = lister
         self.focuser = focuser
         self.picker = picker
@@ -107,20 +107,19 @@ public struct CLI {
         try focuser.focus(window, promptForPermission: true)
         if args.contains("--json") {
             try writeJSON(FocusResult(ok: true, window: window))
+        } else {
+            print("Focused: \(window.displayTitle)")
         }
     }
 
     private func pick(_ args: [String]) throws {
         let json = args.contains("--json")
         let windows = try lister.listWindows()
-        let window = try picker.pick(from: windows)
-        try focuser.focus(window, promptForPermission: true)
-
-        if json {
-            try writeJSON(FocusResult(ok: true, window: window))
-        } else {
-            print("Focused: \(window.displayTitle)")
-        }
+        try picker.execFocusPicker(
+            from: windows,
+            json: json,
+            binaryPath: Bundle.main.executablePath ?? "winpick"
+        )
     }
 
     private func writeJSON<T: Encodable>(_ value: T) throws {
