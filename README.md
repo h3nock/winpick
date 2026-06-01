@@ -32,6 +32,18 @@ Focus a window by id:
 winpick focus 12345
 ```
 
+Check setup:
+
+```sh
+winpick doctor
+```
+
+Open the right macOS permission pane:
+
+```sh
+winpick permissions --open-settings
+```
+
 Pick and return JSON for automation:
 
 ```sh
@@ -49,5 +61,16 @@ bind W display-popup -w 80% -h 70% -E 'winpick'
 ## Permissions
 
 Window listing uses native macOS window metadata. Focusing a selected window
-requires Accessibility permission for the terminal running `winpick`.
+requires Accessibility permission for the terminal app running `winpick`.
 
+Use:
+
+```sh
+winpick permissions --open-settings
+```
+
+Then enable the app printed by `winpick`, usually `Ghostty`, in:
+
+```text
+System Settings -> Privacy & Security -> Accessibility
+```

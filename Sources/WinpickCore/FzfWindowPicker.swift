@@ -17,7 +17,7 @@ public struct FzfWindowPicker: WindowPicking {
             throw WinpickError.noWindows
         }
 
-        guard commandExists("fzf") else {
+        guard Self.commandExists("fzf") else {
             throw WinpickError.fzfUnavailable
         }
 
@@ -65,7 +65,7 @@ public struct FzfWindowPicker: WindowPicking {
             throw WinpickError.noWindows
         }
 
-        guard commandExists("fzf") else {
+        guard Self.commandExists("fzf") else {
             throw WinpickError.fzfUnavailable
         }
 
@@ -121,7 +121,7 @@ public struct FzfWindowPicker: WindowPicking {
         return url
     }
 
-    private func commandExists(_ name: String) -> Bool {
+    public static func commandExists(_ name: String) -> Bool {
         guard let path = ProcessInfo.processInfo.environment["PATH"] else {
             return false
         }

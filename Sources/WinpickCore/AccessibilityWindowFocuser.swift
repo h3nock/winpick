@@ -10,8 +10,10 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
     public init() {}
 
     public func focus(_ window: WindowRecord, promptForPermission: Bool = true) throws {
-        guard accessibilityTrusted(prompt: promptForPermission) else {
-            throw WinpickError.accessibilityPermissionRequired
+        guard AccessibilityPermission.isTrusted(prompt: promptForPermission) else {
+            throw WinpickError.accessibilityPermissionRequired(
+                appName: AccessibilityPermission.likelyHostAppName()
+            )
         }
 
         let appElement = AXUIElementCreateApplication(window.pid)
@@ -43,12 +45,6 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         guard focusResult == .success else {
             throw WinpickError.focusFailed(app: window.app, title: window.title)
         }
-    }
-
-    private func accessibilityTrusted(prompt: Bool) -> Bool {
-        let key = "AXTrustedCheckOptionPrompt"
-        let options = [key: prompt] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
     }
 
     private func bestMatch(for target: WindowRecord, in windows: [AXUIElement]) -> AXUIElement? {

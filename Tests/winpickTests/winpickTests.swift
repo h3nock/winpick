@@ -42,3 +42,10 @@ import Testing
 
     #expect(window.pickerLine.hasPrefix("42\t"))
 }
+
+@Test func permissionInstructionsIncludeAppName() {
+    let message = AccessibilityPermission.instructions(appName: "Ghostty")
+
+    #expect(message.contains("Ghostty"))
+    #expect(message.contains("winpick permissions --open-settings"))
+}

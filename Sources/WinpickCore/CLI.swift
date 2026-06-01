@@ -57,6 +57,10 @@ public struct CLI {
             try focus(args)
         case "current":
             try current(args)
+        case "doctor":
+            try doctor(args)
+        case "permissions", "permission":
+            try permissions(args)
         case "help", "-h", "--help":
             print(Self.help)
         case "version", "--version":
@@ -122,6 +126,64 @@ public struct CLI {
         )
     }
 
+    private func permissions(_ args: [String]) throws {
+        let json = args.contains("--json")
+        let shouldOpenSettings = args.contains("--open-settings")
+        let shouldPrompt = args.contains("--prompt") || shouldOpenSettings
+
+        let report = AccessibilityPermission.report(prompt: shouldPrompt)
+        if shouldOpenSettings && !report.trusted {
+            AccessibilityPermission.openSettings()
+        }
+
+        if json {
+            try writeJSON(report)
+            return
+        }
+
+        if report.trusted {
+            print("Accessibility: granted")
+            print("winpick can focus and raise windows.")
+            return
+        }
+
+        print("Accessibility: missing")
+        print("Enable: \(report.appToEnable)")
+        print("Location: \(report.settingsPath)")
+        print("")
+        print("Command to open settings:")
+        print("  winpick permissions --open-settings")
+        print("")
+        print("After enabling it, rerun:")
+        print("  winpick doctor")
+    }
+
+    private func doctor(_ args: [String]) throws {
+        let json = args.contains("--json")
+        let permission = AccessibilityPermission.report(prompt: false)
+        let windows = try lister.listWindows()
+        let report = DoctorReport(
+            accessibility: permission,
+            fzfFound: FzfWindowPicker.commandExists("fzf"),
+            visibleWindowCount: windows.count
+        )
+
+        if json {
+            try writeJSON(report)
+            return
+        }
+
+        print("winpick doctor")
+        print("Accessibility: \(permission.trusted ? "granted" : "missing")")
+        if !permission.trusted {
+            print("  Enable: \(permission.appToEnable)")
+            print("  Location: \(permission.settingsPath)")
+            print("  Open: winpick permissions --open-settings")
+        }
+        print("fzf: \(report.fzfFound ? "found" : "missing")")
+        print("Visible windows: \(report.visibleWindowCount)")
+    }
+
     private func writeJSON<T: Encodable>(_ value: T) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -144,6 +206,12 @@ public struct CLI {
         let error: String
     }
 
+    private struct DoctorReport: Encodable {
+        let accessibility: AccessibilityPermissionReport
+        let fzfFound: Bool
+        let visibleWindowCount: Int
+    }
+
     public static let help = """
     winpick - macOS window picker and focuser
 
@@ -153,12 +221,15 @@ public struct CLI {
       winpick list [--json]   List visible windows
       winpick focus <id>      Focus a visible window by id
       winpick current [--json]
+      winpick permissions [--json] [--prompt] [--open-settings]
+      winpick doctor [--json]
       winpick help
       winpick version
 
     Notes:
       - Listing uses native macOS window metadata.
-      - Focusing requires Accessibility permission for your terminal.
+      - Focusing requires Accessibility permission for the terminal app running winpick.
+      - Run `winpick permissions --open-settings` for guided setup.
       - No screenshots are captured by this tool.
     """
 }

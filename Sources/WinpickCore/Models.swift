@@ -57,7 +57,7 @@ public struct FocusResult: Codable, Equatable, Sendable {
 
 public enum WinpickError: Error, CustomStringConvertible, Equatable {
     case missingWindow(Int)
-    case accessibilityPermissionRequired
+    case accessibilityPermissionRequired(appName: String)
     case cannotReadApplicationWindows(app: String)
     case cannotMatchAccessibilityWindow(app: String, title: String)
     case focusFailed(app: String, title: String)
@@ -71,8 +71,8 @@ public enum WinpickError: Error, CustomStringConvertible, Equatable {
         switch self {
         case .missingWindow(let id):
             "No visible window found with id \(id)."
-        case .accessibilityPermissionRequired:
-            "Accessibility permission is required to focus windows. Grant it to your terminal and retry."
+        case .accessibilityPermissionRequired(let appName):
+            AccessibilityPermission.instructions(appName: appName)
         case .cannotReadApplicationWindows(let app):
             "Could not read accessibility windows for \(app)."
         case .cannotMatchAccessibilityWindow(let app, let title):
