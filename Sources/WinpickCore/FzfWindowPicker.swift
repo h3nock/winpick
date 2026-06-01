@@ -17,6 +17,10 @@ public struct FzfWindowPicker: WindowPicking {
             throw WinpickError.noWindows
         }
 
+        guard commandExists("fzf") else {
+            throw WinpickError.fzfUnavailable
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = [
@@ -58,5 +62,18 @@ public struct FzfWindowPicker: WindowPicking {
         }
 
         return window
+    }
+
+    private func commandExists(_ name: String) -> Bool {
+        guard let path = ProcessInfo.processInfo.environment["PATH"] else {
+            return false
+        }
+
+        return path
+            .split(separator: ":")
+            .contains { directory in
+                let candidate = "\(directory)/\(name)"
+                return access(candidate, X_OK) == 0
+            }
     }
 }

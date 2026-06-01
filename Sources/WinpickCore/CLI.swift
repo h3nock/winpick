@@ -14,16 +14,29 @@ public struct CLI {
     }
 
     public func run(_ arguments: [String]) -> Int32 {
+        let wantsJSON = arguments.contains("--json")
+
         do {
             try runThrowing(arguments)
             return 0
         } catch WinpickError.pickerCancelled {
+            if wantsJSON {
+                writeErrorJSON("Window picker cancelled.", code: "cancelled")
+            }
             return 130
         } catch let error as WinpickError {
-            FileHandle.standardError.write(Data("winpick: \(error.description)\n".utf8))
+            if wantsJSON {
+                writeErrorJSON(error.description, code: "error")
+            } else {
+                FileHandle.standardError.write(Data("winpick: \(error.description)\n".utf8))
+            }
             return 1
         } catch {
-            FileHandle.standardError.write(Data("winpick: \(error.localizedDescription)\n".utf8))
+            if wantsJSON {
+                writeErrorJSON(error.localizedDescription, code: "error")
+            } else {
+                FileHandle.standardError.write(Data("winpick: \(error.localizedDescription)\n".utf8))
+            }
             return 1
         }
     }
@@ -116,6 +129,20 @@ public struct CLI {
         let data = try encoder.encode(value)
         FileHandle.standardOutput.write(data)
         FileHandle.standardOutput.write(Data("\n".utf8))
+    }
+
+    private func writeErrorJSON(_ message: String, code: String) {
+        do {
+            try writeJSON(ErrorResponse(ok: false, code: code, error: message))
+        } catch {
+            FileHandle.standardError.write(Data("winpick: \(message)\n".utf8))
+        }
+    }
+
+    private struct ErrorResponse: Encodable {
+        let ok: Bool
+        let code: String
+        let error: String
     }
 
     public static let help = """
