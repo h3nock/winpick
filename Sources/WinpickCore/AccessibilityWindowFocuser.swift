@@ -21,6 +21,10 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
             )
         }
 
+        if focusWithYabai(window) {
+            return
+        }
+
         let appElement = AXUIElementCreateApplication(window.pid)
         NSRunningApplication(processIdentifier: window.pid)?
             .activate(options: [])
@@ -37,6 +41,32 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         guard focusResult == .success else {
             throw WinpickError.focusFailed(app: window.app, title: window.title)
         }
+    }
+
+    private func focusWithYabai(_ window: WindowRecord) -> Bool {
+        guard let space = window.space, window.id > 0 else {
+            return false
+        }
+
+        _ = runYabai(arguments: ["-m", "space", "--focus", String(space)])
+        return runYabai(arguments: ["-m", "window", "--focus", String(window.id)])
+    }
+
+    private func runYabai(arguments: [String]) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["yabai"] + arguments
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+        } catch {
+            return false
+        }
+
+        process.waitUntilExit()
+        return process.terminationStatus == 0
     }
 
     private func matchingWindow(for target: WindowRecord, in appElement: AXUIElement) throws -> AXUIElement {

@@ -19,6 +19,10 @@ public struct WindowFrame: Codable, Equatable, Sendable {
             + abs(width - other.width)
             + abs(height - other.height)
     }
+
+    var pickerText: String {
+        "\(Int(width))x\(Int(height))+\(Int(x))+\(Int(y))"
+    }
 }
 
 public struct WindowRecord: Codable, Equatable, Sendable {
@@ -29,6 +33,7 @@ public struct WindowRecord: Codable, Equatable, Sendable {
     public let layer: Int
     public let visible: Bool
     public let frame: WindowFrame
+    public let space: Int?
 
     public init(
         id: Int,
@@ -37,7 +42,8 @@ public struct WindowRecord: Codable, Equatable, Sendable {
         pid: Int32,
         layer: Int,
         visible: Bool,
-        frame: WindowFrame
+        frame: WindowFrame,
+        space: Int? = nil
     ) {
         self.id = id
         self.app = app
@@ -46,6 +52,7 @@ public struct WindowRecord: Codable, Equatable, Sendable {
         self.layer = layer
         self.visible = visible
         self.frame = frame
+        self.space = space
     }
 
     public var displayTitle: String {
@@ -53,9 +60,17 @@ public struct WindowRecord: Codable, Equatable, Sendable {
     }
 
     public var pickerLine: String {
-        let label = title.isEmpty ? app : "\(app) - \(title)"
-        let frameText = "\(Int(frame.width))x\(Int(frame.height))+\(Int(frame.x))+\(Int(frame.y))"
-        return "\(id)\t\(label)  [id:\(id)] [\(frameText)]"
+        if title.isEmpty {
+            return "\(spaceLabel)\t\(app)"
+        }
+        return "\(spaceLabel)\t\(app)\t\(title)"
+    }
+
+    public var spaceLabel: String {
+        guard let space else {
+            return "-"
+        }
+        return "S\(space)"
     }
 }
 
@@ -64,8 +79,18 @@ public struct FocusResult: Codable, Equatable, Sendable {
     public let window: WindowRecord
 }
 
+public enum DependencyInstructions {
+    public static let fzfInstallHint = """
+    Install fzf with Homebrew:
+      brew install fzf
+
+    Or install fzf another way and make sure `fzf` is on PATH.
+    """
+}
+
 public enum WinpickError: Error, CustomStringConvertible, Equatable {
     case missingWindow(Int)
+    case notFocusableWindow(id: Int, app: String, title: String)
     case accessibilityPermissionRequired(appName: String)
     case cannotReadApplicationWindows(app: String)
     case cannotMatchAccessibilityWindow(app: String, title: String)
@@ -79,25 +104,31 @@ public enum WinpickError: Error, CustomStringConvertible, Equatable {
     public var description: String {
         switch self {
         case .missingWindow(let id):
-            "No window found with id \(id). Run `winpick list` again because window ids can change."
+            return "No focusable window found with id \(id). Run `winpick list` again because window ids can change."
+        case .notFocusableWindow(let id, let app, let title):
+            let label = title.isEmpty ? app : "\(app) - \(title)"
+            return "Window \(id) (\(label)) exists in raw macOS window records but is not exposed as a focusable Accessibility window."
         case .accessibilityPermissionRequired(let appName):
-            AccessibilityPermission.instructions(appName: appName)
+            return AccessibilityPermission.instructions(appName: appName)
         case .cannotReadApplicationWindows(let app):
-            "Could not read accessibility windows for \(app)."
+            return "Could not read accessibility windows for \(app)."
         case .cannotMatchAccessibilityWindow(let app, let title):
-            "Could not match accessibility window for \(app) - \(title)."
+            return "Could not match accessibility window for \(app) - \(title)."
         case .focusFailed(let app, let title):
-            "Could not focus \(app) - \(title)."
+            return "Could not focus \(app) - \(title)."
         case .pickerRequiresTerminal:
-            "Window picker requires an interactive terminal."
+            return "Window picker requires an interactive terminal."
         case .fzfUnavailable:
-            "fzf is required for interactive picking but was not found on PATH."
+            return """
+            fzf is required for interactive picking but was not found on PATH.
+            \(DependencyInstructions.fzfInstallHint)
+            """
         case .pickerCancelled:
-            "Window picker cancelled."
+            return "Window picker cancelled."
         case .invalidArguments(let message):
-            message
+            return message
         case .noWindows:
-            "No windows found."
+            return "No windows found."
         }
     }
 }
