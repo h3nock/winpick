@@ -32,28 +32,17 @@ public struct CLI {
             }
             return 130
         } catch let error as WinpickError {
-            if wantsJSON {
-                writeErrorJSON(error.description, code: "error")
-            } else {
-                FileHandle.standardError.write(Data("winpick: \(error.description)\n".utf8))
-            }
+            writeError(error.description, wantsJSON: wantsJSON)
             return 1
         } catch {
-            if wantsJSON {
-                writeErrorJSON(error.localizedDescription, code: "error")
-            } else {
-                FileHandle.standardError.write(Data("winpick: \(error.localizedDescription)\n".utf8))
-            }
+            writeError(error.localizedDescription, wantsJSON: wantsJSON)
             return 1
         }
     }
 
     private func runThrowing(_ arguments: [String]) throws {
-        var args = arguments
-        let command = Self.canonicalCommand(args.first ?? "pick")
-        if !args.isEmpty {
-            args.removeFirst()
-        }
+        let command = Self.canonicalCommand(arguments.first ?? "pick")
+        let args = Array(arguments.dropFirst())
 
         switch command {
         case "pick":
@@ -70,9 +59,9 @@ public struct CLI {
             try doctor(args)
         case "permissions":
             try permissions(args)
-        case "help", "-h", "--help":
+        case "help":
             print(Self.help)
-        case "version", "--version":
+        case "version":
             print("winpick 0.1.0")
         default:
             throw WinpickError.invalidArguments("Unknown command: \(command)")
@@ -129,13 +118,7 @@ public struct CLI {
             throw WinpickError.missingWindow(id)
         }
 
-        try focuser.focus(window, promptForPermission: true)
-        recordFocusInHistory(window)
-        if Self.hasJSONFlag(args) {
-            try writeJSON(FocusResult(ok: true, window: window))
-        } else {
-            print("Focused: \(window.displayTitle)")
-        }
+        try focusWindow(window, args: args)
     }
 
     private func focusRecord(_ args: [String]) throws {
@@ -146,6 +129,10 @@ public struct CLI {
         }
 
         let window = try JSONDecoder().decode(WindowRecord.self, from: data)
+        try focusWindow(window, args: args)
+    }
+
+    private func focusWindow(_ window: WindowRecord, args: [String]) throws {
         try focuser.focus(window, promptForPermission: true)
         recordFocusInHistory(window)
         if Self.hasJSONFlag(args) {
@@ -267,6 +254,14 @@ public struct CLI {
         do {
             try writeJSON(ErrorResponse(ok: false, code: code, error: message))
         } catch {
+            FileHandle.standardError.write(Data("winpick: \(message)\n".utf8))
+        }
+    }
+
+    private func writeError(_ message: String, wantsJSON: Bool) {
+        if wantsJSON {
+            writeErrorJSON(message, code: "error")
+        } else {
             FileHandle.standardError.write(Data("winpick: \(message)\n".utf8))
         }
     }

@@ -68,9 +68,8 @@ public struct FzfWindowPicker {
     ) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("winpick-\(UUID().uuidString).tsv")
-        try Data(
-            try pickerRows(from: windows, recentWindowIDs: recentWindowIDs).utf8
-        ).write(to: url, options: [.atomic])
+        let rows = try pickerRows(from: windows, recentWindowIDs: recentWindowIDs)
+        try Data(rows.utf8).write(to: url, options: [.atomic])
         return url
     }
 
@@ -153,20 +152,6 @@ public struct FzfWindowPicker {
     }
 
     public static func commandExists(_ name: String) -> Bool {
-        commandPath(name) != nil
-    }
-
-    static func commandPath(_ name: String) -> String? {
-        guard let path = ProcessInfo.processInfo.environment["PATH"] else {
-            return nil
-        }
-
-        return path
-            .split(separator: ":")
-            .compactMap { directory -> String? in
-                let candidate = "\(directory)/\(name)"
-                return access(candidate, X_OK) == 0 ? candidate : nil
-            }
-            .first
+        CommandLookup.exists(name)
     }
 }

@@ -7,11 +7,6 @@ public protocol WindowFocusing {
 }
 
 public struct AccessibilityWindowFocuser: WindowFocusing {
-    private enum WindowReadResult {
-        case success([AXUIElement])
-        case failure
-    }
-
     public init() {}
 
     public func focus(_ window: WindowRecord, promptForPermission: Bool = true) throws {
@@ -75,7 +70,7 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         var didReadWindows = false
 
         for attempt in 0..<attempts {
-            if case .success(let windows) = readWindows(from: appElement) {
+            if let windows = AccessibilityElementAttributes.windows(of: appElement) {
                 didReadWindows = true
                 if let match = bestMatch(for: target, in: windows) {
                     return match
@@ -94,25 +89,6 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         throw WinpickError.cannotReadApplicationWindows(app: target.app)
     }
 
-    private func readWindows(from appElement: AXUIElement) -> WindowReadResult {
-        var windowsValue: CFTypeRef?
-        let copyResult = AXUIElementCopyAttributeValue(
-            appElement,
-            kAXWindowsAttribute as CFString,
-            &windowsValue
-        )
-
-        guard copyResult == .success else {
-            return .failure
-        }
-
-        guard let windows = windowsValue as? [AXUIElement] else {
-            return .failure
-        }
-
-        return .success(windows)
-    }
-
     private func bestMatch(for target: WindowRecord, in windows: [AXUIElement]) -> AXUIElement? {
         let candidates = windows.map { window in
             (window: window, score: score(window, against: target))
@@ -127,14 +103,14 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
     private func score(_ window: AXUIElement, against target: WindowRecord) -> Int {
         var score = 0
 
-        let title = stringAttribute(window, kAXTitleAttribute)
+        let title = AccessibilityElementAttributes.string(window, kAXTitleAttribute)
         if !target.title.isEmpty, title == target.title {
             score += 100
         } else if target.title.isEmpty, title.isEmpty {
             score += 20
         }
 
-        if let frame = frame(of: window) {
+        if let frame = AccessibilityElementAttributes.frame(of: window) {
             let distance = frame.distance(to: target.frame)
             if distance < 8 {
                 score += 80
@@ -144,41 +120,5 @@ public struct AccessibilityWindowFocuser: WindowFocusing {
         }
 
         return score
-    }
-
-    private func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
-            return ""
-        }
-        return value as? String ?? ""
-    }
-
-    private func frame(of element: AXUIElement) -> WindowFrame? {
-        var positionValue: CFTypeRef?
-        var sizeValue: CFTypeRef?
-
-        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &positionValue) == .success,
-              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeValue) == .success,
-              let positionAX = positionValue,
-              let sizeAX = sizeValue
-        else {
-            return nil
-        }
-
-        var point = CGPoint.zero
-        var size = CGSize.zero
-        guard AXValueGetValue(positionAX as! AXValue, .cgPoint, &point),
-              AXValueGetValue(sizeAX as! AXValue, .cgSize, &size)
-        else {
-            return nil
-        }
-
-        return WindowFrame(
-            x: point.x,
-            y: point.y,
-            width: size.width,
-            height: size.height
-        )
     }
 }

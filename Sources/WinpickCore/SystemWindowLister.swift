@@ -1,7 +1,6 @@
 import AppKit
 import ApplicationServices
 import CoreGraphics
-import Darwin
 import Foundation
 
 public protocol WindowListing {
@@ -10,7 +9,7 @@ public protocol WindowListing {
 }
 
 public struct SystemWindowLister: WindowListing {
-    struct YabaiWindowInfo {
+    private struct YabaiWindowInfo {
         let space: Int?
         let title: String?
         let focusable: Bool?
@@ -28,7 +27,7 @@ public struct SystemWindowLister: WindowListing {
     public init() {}
 
     public static func optionalSpaceMetadataProviderName() -> String? {
-        commandPath("yabai") == nil ? nil : "yabai"
+        CommandLookup.exists("yabai") ? "yabai" : nil
     }
 
     public func listWindows() throws -> [WindowRecord] {
@@ -66,11 +65,7 @@ public struct SystemWindowLister: WindowListing {
     }
 
     public func listAllWindows() throws -> [WindowRecord] {
-        Self.sort(listRawWindows())
-    }
-
-    private func listRawWindows() -> [WindowRecord] {
-        listRawWindowSnapshot().windows
+        Self.sort(listRawWindowSnapshot().windows)
     }
 
     private func listRawWindowSnapshot() -> RawWindowSnapshot {
@@ -148,35 +143,25 @@ public struct SystemWindowLister: WindowListing {
         let appElement = AXUIElementCreateApplication(application.processIdentifier)
         _ = AXUIElementSetMessagingTimeout(appElement, 0.12)
 
-        var windowsValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(
-            appElement,
-            kAXWindowsAttribute as CFString,
-            &windowsValue
-        ) == .success, let axWindows = windowsValue as? [AXUIElement] {
+        if let axWindows = AccessibilityElementAttributes.windows(of: appElement) {
             if axWindows.contains(where: Self.isFocusableAccessibilityWindow) {
                 return true
             }
         }
 
-        var focusedValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(
+        if let focusedWindow = AccessibilityElementAttributes.element(
             appElement,
-            kAXFocusedWindowAttribute as CFString,
-            &focusedValue
-        ) == .success,
-           let focusedWindow = focusedValue,
-           CFGetTypeID(focusedWindow) == AXUIElementGetTypeID()
-        {
-            return Self.isFocusableAccessibilityWindow(focusedWindow as! AXUIElement)
+            kAXFocusedWindowAttribute
+        ) {
+            return Self.isFocusableAccessibilityWindow(focusedWindow)
         }
 
         return false
     }
 
     private static func isFocusableAccessibilityWindow(_ axWindow: AXUIElement) -> Bool {
-        guard stringAttribute(axWindow, kAXRoleAttribute) == kAXWindowRole,
-              let frame = frame(of: axWindow),
+        guard AccessibilityElementAttributes.string(axWindow, kAXRoleAttribute) == kAXWindowRole,
+              let frame = AccessibilityElementAttributes.frame(of: axWindow),
               frame.width >= 160,
               frame.height >= 120
         else {
@@ -258,42 +243,6 @@ public struct SystemWindowLister: WindowListing {
         return true
     }
 
-    private static func stringAttribute(_ element: AXUIElement, _ attribute: String) -> String {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
-            return ""
-        }
-        return value as? String ?? ""
-    }
-
-    private static func frame(of element: AXUIElement) -> WindowFrame? {
-        var positionValue: CFTypeRef?
-        var sizeValue: CFTypeRef?
-
-        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &positionValue) == .success,
-              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeValue) == .success,
-              let positionAX = positionValue,
-              let sizeAX = sizeValue
-        else {
-            return nil
-        }
-
-        var point = CGPoint.zero
-        var size = CGSize.zero
-        guard AXValueGetValue(positionAX as! AXValue, .cgPoint, &point),
-              AXValueGetValue(sizeAX as! AXValue, .cgSize, &size)
-        else {
-            return nil
-        }
-
-        return WindowFrame(
-            x: point.x,
-            y: point.y,
-            width: size.width,
-            height: size.height
-        )
-    }
-
     static func sort(_ windows: [WindowRecord]) -> [WindowRecord] {
         windows.sorted { lhs, rhs in
             let lhsSpace = lhs.space ?? Int.max
@@ -327,19 +276,5 @@ public struct SystemWindowLister: WindowListing {
 
     private static func stringValue(_ value: Any?) -> String {
         value as? String ?? ""
-    }
-
-    private static func commandPath(_ name: String) -> String? {
-        guard let path = ProcessInfo.processInfo.environment["PATH"] else {
-            return nil
-        }
-
-        return path
-            .split(separator: ":")
-            .compactMap { directory -> String? in
-                let candidate = "\(directory)/\(name)"
-                return access(candidate, X_OK) == 0 ? candidate : nil
-            }
-            .first
     }
 }

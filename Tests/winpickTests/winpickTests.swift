@@ -3,96 +3,73 @@ import Testing
 @testable import WinpickCore
 
 @Test func commandAliasesResolveToCanonicalCommands() {
-    #expect(CLI.canonicalCommand("p") == "pick")
-    #expect(CLI.canonicalCommand("l") == "list")
-    #expect(CLI.canonicalCommand("ls") == "list")
-    #expect(CLI.canonicalCommand("f") == "focus")
-    #expect(CLI.canonicalCommand("c") == "current")
-    #expect(CLI.canonicalCommand("cur") == "current")
-    #expect(CLI.canonicalCommand("d") == "doctor")
-    #expect(CLI.canonicalCommand("doc") == "doctor")
-    #expect(CLI.canonicalCommand("perm") == "permissions")
-    #expect(CLI.canonicalCommand("perms") == "permissions")
-    #expect(CLI.canonicalCommand("h") == "help")
-    #expect(CLI.canonicalCommand("ver") == "version")
+    let aliases = [
+        ("p", "pick"),
+        ("l", "list"),
+        ("ls", "list"),
+        ("f", "focus"),
+        ("c", "current"),
+        ("cur", "current"),
+        ("d", "doctor"),
+        ("doc", "doctor"),
+        ("perm", "permissions"),
+        ("perms", "permissions"),
+        ("h", "help"),
+        ("ver", "version"),
+    ]
+
+    for (alias, command) in aliases {
+        #expect(CLI.canonicalCommand(alias) == command)
+    }
 }
 
 @Test func shortFlagsMatchLongFlags() {
-    #expect(CLI.hasJSONFlag(["-j"]))
-    #expect(CLI.hasJSONFlag(["--json"]))
-    #expect(CLI.hasAllFlag(["-a"]))
-    #expect(CLI.hasAllFlag(["--all"]))
-    #expect(CLI.hasOpenSettingsFlag(["-o"]))
-    #expect(CLI.hasOpenSettingsFlag(["--open-settings"]))
+    for flag in ["-j", "--json"] {
+        #expect(CLI.hasJSONFlag([flag]))
+    }
+    for flag in ["-a", "--all"] {
+        #expect(CLI.hasAllFlag([flag]))
+    }
+    for flag in ["-o", "--open-settings"] {
+        #expect(CLI.hasOpenSettingsFlag([flag]))
+    }
 }
 
 @Test func windowDisplayTitleUsesAppWhenTitleIsEmpty() {
-    let window = WindowRecord(
-        id: 1,
-        app: "Ghostty",
-        title: "",
-        pid: 10,
-        layer: 0,
-        visible: true,
-        frame: WindowFrame(x: 0, y: 0, width: 100, height: 100)
-    )
+    let window = testWindow(id: 1, title: "")
 
     #expect(window.displayTitle == "Ghostty")
 }
 
 @Test func windowDisplayTitleIncludesTitleWhenPresent() {
-    let window = WindowRecord(
-        id: 1,
-        app: "Ghostty",
-        title: "kbolt",
-        pid: 10,
-        layer: 0,
-        visible: true,
-        frame: WindowFrame(x: 0, y: 0, width: 100, height: 100)
-    )
+    let window = testWindow(id: 1, title: "kbolt")
 
     #expect(window.displayTitle == "Ghostty - kbolt")
 }
 
-@Test func pickerLineShowsSpaceAppAndTitle() {
-    let window = WindowRecord(
-        id: 42,
-        app: "Brave Browser",
-        title: "ChatGPT",
-        pid: 10,
-        layer: 0,
-        visible: true,
-        frame: WindowFrame(x: 0, y: 0, width: 100, height: 100),
-        space: 3
-    )
+@Test func pickerLineFormatsSpaceAppAndTitle() {
+    let cases = [
+        (
+            testWindow(id: 42, app: "Brave Browser", title: "ChatGPT", space: 3),
+            "S3\tBrave Browser\tChatGPT"
+        ),
+        (
+            testWindow(id: 42, app: "Brave Browser", title: ""),
+            "-\tBrave Browser"
+        ),
+    ]
 
-    #expect(window.pickerLine == "S3\tBrave Browser\tChatGPT")
+    for (window, expected) in cases {
+        #expect(window.pickerLine == expected)
+    }
 }
 
-@Test func pickerLineUsesDashWhenSpaceIsUnknown() {
-    let window = WindowRecord(
+@Test func fzfDisplayLineShowsVisibleFieldsAndRecentMarker() {
+    let window = testWindow(
         id: 42,
-        app: "Brave Browser",
-        title: "",
-        pid: 10,
-        layer: 0,
-        visible: true,
-        frame: WindowFrame(x: 0, y: 0, width: 100, height: 100)
-    )
-
-    #expect(window.pickerLine == "-\tBrave Browser")
-}
-
-@Test func fzfDisplayLineShowsOnlySpaceAppAndTitle() {
-    let window = WindowRecord(
-        id: 42,
-        app: "Ghostty",
         title: "ta kbolt",
-        pid: 10,
-        layer: 0,
-        visible: true,
-        frame: WindowFrame(x: 12, y: 34, width: 900, height: 700),
-        space: 2
+        space: 2,
+        frame: WindowFrame(x: 12, y: 34, width: 900, height: 700)
     )
 
     let line = FzfWindowPicker.displayLine(for: window, appWidth: 7)
@@ -100,27 +77,14 @@ import Testing
     #expect(line == "   S2  Ghostty  ta kbolt")
     #expect(!line.contains("42"))
     #expect(!line.contains("900x700"))
-}
 
-@Test func fzfDisplayLineMarksRecentRows() {
-    let window = WindowRecord(
-        id: 42,
-        app: "Ghostty",
-        title: "ta kbolt",
-        pid: 10,
-        layer: 0,
-        visible: true,
-        frame: WindowFrame(x: 12, y: 34, width: 900, height: 700),
-        space: 2
-    )
-
-    let line = FzfWindowPicker.displayLine(
+    let recentLine = FzfWindowPicker.displayLine(
         for: window,
         appWidth: 7,
         isRecent: true
     )
 
-    #expect(line == "R  S2  Ghostty  ta kbolt")
+    #expect(recentLine == "R  S2  Ghostty  ta kbolt")
 }
 
 @Test func fzfArgumentsHideMetadataAndPreview() {
@@ -132,43 +96,24 @@ import Testing
 
 @Test func windowSortingGroupsBySpaceWithUnknownSpaceLast() {
     let windows = [
-        WindowRecord(
+        testWindow(
             id: 30,
-            app: "Ghostty",
-            title: "unknown",
-            pid: 10,
-            layer: 0,
-            visible: true,
-            frame: WindowFrame(x: 0, y: 0, width: 100, height: 100)
+            title: "unknown"
         ),
-        WindowRecord(
+        testWindow(
             id: 20,
-            app: "Ghostty",
             title: "space two",
-            pid: 10,
-            layer: 0,
-            visible: true,
-            frame: WindowFrame(x: 0, y: 0, width: 100, height: 100),
             space: 2
         ),
-        WindowRecord(
+        testWindow(
             id: 10,
-            app: "Ghostty",
             title: "space one",
-            pid: 10,
-            layer: 0,
-            visible: true,
-            frame: WindowFrame(x: 0, y: 0, width: 100, height: 100),
             space: 1
         ),
-        WindowRecord(
+        testWindow(
             id: 11,
             app: "Brave Browser",
             title: "space one",
-            pid: 10,
-            layer: 0,
-            visible: true,
-            frame: WindowFrame(x: 0, y: 0, width: 100, height: 100),
             space: 1
         ),
     ]
@@ -235,37 +180,37 @@ import Testing
     #expect(url.path == "/Users/example/Library/Application Support/winpick/history.json")
 }
 
-@Test func yabaiFocusableValueAcceptsStandardAXWindow() {
-    let row: [String: Any] = [
-        "role": "AXWindow",
-        "has-ax-reference": true,
-        "is-minimized": false,
-        "is-hidden": false,
+@Test func yabaiFocusableValueParsesWindowMetadata() {
+    let cases: [(row: [String: Any], expected: Bool?)] = [
+        (
+            [
+                "role": "AXWindow",
+                "has-ax-reference": true,
+                "is-minimized": false,
+                "is-hidden": false,
+            ],
+            true
+        ),
+        (
+            [
+                "role": "AXMenu",
+                "has-ax-reference": true,
+            ],
+            false
+        ),
+        (
+            [
+                "role": "AXWindow",
+                "has-ax-reference": false,
+            ],
+            false
+        ),
+        ([:], nil),
     ]
 
-    #expect(SystemWindowLister.yabaiFocusableValue(row) == true)
-}
-
-@Test func yabaiFocusableValueRejectsNonWindowRows() {
-    let row: [String: Any] = [
-        "role": "AXMenu",
-        "has-ax-reference": true,
-    ]
-
-    #expect(SystemWindowLister.yabaiFocusableValue(row) == false)
-}
-
-@Test func yabaiFocusableValueRejectsRowsWithoutAXReference() {
-    let row: [String: Any] = [
-        "role": "AXWindow",
-        "has-ax-reference": false,
-    ]
-
-    #expect(SystemWindowLister.yabaiFocusableValue(row) == false)
-}
-
-@Test func yabaiFocusableValueFallsBackWhenMetadataIsMissing() {
-    #expect(SystemWindowLister.yabaiFocusableValue([:]) == nil)
+    for testCase in cases {
+        #expect(SystemWindowLister.yabaiFocusableValue(testCase.row) == testCase.expected)
+    }
 }
 
 @Test func windowFrameDistanceComparesPositionAndSize() {
