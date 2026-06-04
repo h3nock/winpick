@@ -17,6 +17,14 @@ window interactively.
 
 ## Install
 
+Homebrew:
+
+```sh
+brew install h3nock/tap/winpick
+```
+
+From source:
+
 ```sh
 swift build -c release
 install -m 0755 .build/release/winpick ~/.local/bin/winpick
